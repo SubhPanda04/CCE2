@@ -131,7 +131,7 @@ const SignUp = () => {
                         </motion.div>
             )}
 
-            {/account text section/}
+            {/* account text section */}
 
             {!isLogin ? (<p className='text-sm text-primaryText flex items-center justify-center gap-3'>Already Have an account !{" "} 
                 <span onClick={() => setisLogin(!isLogin)} className='text-emerald-500 cursor-pointer'>Login Here</span></p>
