@@ -301,7 +301,7 @@ const EditorPage = () => {
           )}
          
           {/* Editor content */}
-          <div className={`flex-grow ${!currentFile ? 'flex items-center justify-center' : ''}`}>
+          <div className={`h-3/5 ${!currentFile ? 'flex items-center justify-center' : ''}`}>
             {currentFile ? (
               <Editor 
                 fileId={currentFile.id} 
@@ -320,7 +320,7 @@ const EditorPage = () => {
           
           {/* IO Panel */}
           {currentFile && (
-            <div className="h-1/4 border-t border-[#132F4C]">
+            <div className="h-2/5 border-t border-[#132F4C]">
               <div className="flex h-full">
                 {isInputVisible && (
                   <div className="w-1/2 h-full border-r border-[#132F4C]">
