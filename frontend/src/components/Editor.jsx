@@ -34,7 +34,8 @@ const getLanguageFromFileName = (fileName) => {
 };
 
 const contentCache = new Map();
-const Editor = () => {
+// Update the Editor component to accept and use the socket and roomId props
+const Editor = ({ fileId, onCodeChange, socket, roomId }) => {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const dispatch = useDispatch();
@@ -287,28 +288,40 @@ const Editor = () => {
     }
   }, [roomParam, dispatch, currentFile]);
 
+  // Handle editor content changes
   const handleEditorChange = (value) => {
-    if (!currentFile || !currentFolder) return;
-    dispatch(setFileContent({ 
-      fileId: currentFile.id, 
-      content: value 
+    if (!currentFile) return;
+    
+    // Update local state
+    dispatch(setFileContent({
+      fileId: currentFile.id,
+      content: value
     }));
-    debouncedUpdate(currentFile.id, value);
     
-    const urlParams = new URLSearchParams(location.search);
-    const roomParam = urlParams.get('room');
-    
-    if (ws && ws.readyState === WebSocket.OPEN && roomParam && 
-        (joinStatus === 'accepted' || joinStatus === 'owner')) {
-      ws.send(JSON.stringify({
-        type: 'code',
-        roomId: roomParam,
-        fileId: currentFile.id,
-        code: value,
-        userId: localStorage.getItem('userUID') || 'anonymous'
-      }));
+    // Call the onCodeChange prop to emit changes to collaborators
+    if (onCodeChange) {
+      onCodeChange(currentFile.id, value);
     }
   };
+
+  // Listen for code updates from other users
+  useEffect(() => {
+    if (!socket) return;
+    
+    socket.on('code-update', (data) => {
+      if (currentFile && editorRef.current) {
+        // Update editor content without triggering onChange
+        const model = editorRef.current.getModel();
+        if (model) {
+          model.setValue(data.code);
+        }
+      }
+    });
+    
+    return () => {
+      socket.off('code-update');
+    };
+  }, [socket, currentFile]);
 
   if (!currentFile) {
     return (
@@ -323,57 +336,41 @@ const Editor = () => {
   }
 
   return (
-    <div className="w-full h-full relative">
-      {/* Room ID indicator */}
-      {roomParam && (
-        <div className="absolute top-2 left-2 z-10 bg-gray-800 text-gray-300 px-3 py-1.5 rounded-md text-sm">
-          <span>Room: {roomParam}</span>
+    <div className="h-full w-full relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       )}
-      <div className="h-full">
+      
       <MonacoEditor
         height="100%"
-        defaultLanguage={editorLanguage}
         language={editorLanguage}
         value={currentContent}
         theme={selectedTheme}
+        options={editorOptions}
         onChange={handleEditorChange}
-        onMount={handleEditorDidMount}
-        loading={
-          <div className="flex items-center justify-center h-full bg-[#1e1e1e]">
-            <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="text-gray-400">Loading editor...</p>
-            </div>
-          </div>
-        }
-        options={{
-          fontSize: 21,
-          fontFamily: "'Consolas', 'Courier New', monospace",
-          lineNumbers: 'on',
-          minimap: { enabled: false }, 
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          wordWrap: 'on',
-          cursorStyle: 'line',
-          cursorBlinking: 'blink',
-          cursorSmoothCaretAnimation: 'on',
-          formatOnPaste: false,
-          formatOnType: false,
-          textDirection: 'ltr',
-          fontLigatures: false,
-          disableMonospaceOptimizations: true,
-          renderWhitespace: 'none',
-          renderControlCharacters: false,
-          renderIndentGuides: false,
-          folding: true,
-          glyphMargin: false
+        onMount={(editor, monaco) => {
+          editorRef.current = editor;
+          monacoRef.current = monaco;
+          setEditorReady(true);
         }}
-        key={currentFile.id}
       />
-      </div>
-      {/* Render AI assistant when enabled */}
+      
       {isAIEnabled && <AIAssistant />}
+      
+      {roomParam && (
+        <div className="absolute top-2 right-2 flex items-center gap-2">
+          <button
+            onClick={copyShareableLink}
+            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-xs"
+            title="Copy shareable link"
+          >
+            {copied ? <Check size={14} /> : <Share2 size={14} />}
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

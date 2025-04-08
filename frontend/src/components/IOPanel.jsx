@@ -3,7 +3,7 @@ import { FaTerminal, FaKeyboard, FaSpinner } from 'react-icons/fa';
 import { useSelector, useDispatch } from 'react-redux';
 import { setInput } from '../redux/slices/codeExecutionSlice';
 
-const IOPanel = ({ type = 'output' }) => {
+const IOPanel = ({ type = 'output', socket, roomId }) => {
   const dispatch = useDispatch();
   const { input, output, isExecuting, executionError } = useSelector(
     (state) => state.codeExecution
@@ -24,7 +24,30 @@ const IOPanel = ({ type = 'output' }) => {
     const newInput = e.target.value;
     setLocalInput(newInput);
     dispatch(setInput(newInput));
+    
+    // Emit input changes to collaborators
+    if (socket && roomId && !isOutput) {
+      socket.emit('input-change', {
+        roomId,
+        input: newInput,
+        userId: localStorage.getItem('userUID') || 'anonymous'
+      });
+    }
   };
+  
+  // Listen for input changes from collaborators
+  useEffect(() => {
+    if (!socket || isOutput) return;
+    
+    socket.on('input-update', (data) => {
+      setLocalInput(data.input);
+      dispatch(setInput(data.input));
+    });
+    
+    return () => {
+      socket.off('input-update');
+    };
+  }, [socket, isOutput, dispatch]);
   
   // Determine what to show in the output panel
   const getOutputContent = () => {

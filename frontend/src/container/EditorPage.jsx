@@ -23,9 +23,8 @@ const EditorPage = () => {
   const [socket, setSocket] = useState(null);
   const [collaborators, setCollaborators] = useState([]);
   
-  // Connect to Socket.io server when component mounts
   useEffect(() => {
-    const socketInstance = io('http://localhost:5000');
+    const socketInstance = io('https://cce2.onrender.com');
     setSocket(socketInstance);
     
     return () => {
@@ -271,10 +270,10 @@ const EditorPage = () => {
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-[#1e1e1e]">
-      <Header collaborators={collaborators} />
+      <Header collaborators={collaborators} socket={socket} roomId={roomId} />
       <div className="w-full h-[calc(100vh-48px)] flex">
         <div className="w-80 flex-shrink-0">
-          <Sidebar folderId={folderId} />
+          <Sidebar folderId={folderId} socket={socket} roomId={roomId} />
         </div>
         <div className="flex-1 flex flex-col relative overflow-hidden">
           {/* File tabs section */}
@@ -325,12 +324,12 @@ const EditorPage = () => {
               <div className="flex h-full">
                 {isInputVisible && (
                   <div className="w-1/2 h-full border-r border-[#132F4C]">
-                    <IOPanel type="input" />
+                    <IOPanel type="input" socket={socket} roomId={roomId} />
                   </div>
                 )}
                 {isOutputVisible && (
                   <div className={`${isInputVisible ? 'w-1/2' : 'w-full'} h-full`}>
-                    <IOPanel type="output" />
+                    <IOPanel type="output" socket={socket} roomId={roomId} />
                   </div>
                 )}
               </div>

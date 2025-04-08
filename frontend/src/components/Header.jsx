@@ -65,10 +65,7 @@ const Header = () => {
         const newPath = `${window.location.pathname}?room=${currentRoomId}`;
         window.history.pushState(null, '', newPath);
       }
-      
-      // Create the shareable URL with the ngrok domain
-      const ngrokDomain = 'd2c5-103-92-44-199.ngrok-free.app';
-      const shareableUrl = `https://${ngrokDomain}/editor/${folderId}/${fileId}?room=${currentRoomId}`;
+      const shareableUrl = `https://cce2.onrender.com/editor/${folderId}/${fileId}?room=${currentRoomId}`;
       
       navigator.clipboard.writeText(shareableUrl)
         .then(() => {

@@ -54,10 +54,7 @@ io.on('connection', (socket) => {
     });
     
     // Send current users list to the new user
-    const users = Array.from(rooms.get(roomId).values()).map(user => ({
-      id: user.id,
-      name: user.name
-    }));
+    const users = Array.from(rooms.get(roomId).values()).map(user => user.name);
     
     io.to(socket.id).emit('room-users', { users });
     
@@ -66,11 +63,18 @@ io.on('connection', (socket) => {
   });
 
   // Handle code changes
-  socket.on('code-change', ({ roomId, code, cursorPosition, userId }) => {
+  socket.on('code-change', ({ roomId, code, userId }) => {
     // Broadcast to everyone in the room except sender
     socket.to(roomId).emit('code-update', {
       code,
-      cursorPosition,
+      userId
+    });
+  });
+
+  // Handle input changes for IOPanel
+  socket.on('input-change', ({ roomId, input, userId }) => {
+    socket.to(roomId).emit('input-update', {
+      input,
       userId
     });
   });
@@ -101,12 +105,8 @@ io.on('connection', (socket) => {
           userName
         });
         
-        // Send updated users list
-        const users = Array.from(rooms.get(roomId).values()).map(user => ({
-          id: user.id,
-          name: user.name
-        }));
-        
+        // Broadcast updated users list
+        const users = Array.from(rooms.get(roomId).values()).map(user => user.name);
         io.to(roomId).emit('room-users', { users });
       }
     }
@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Basic route for health check
+// Add a simple health check endpoint
 app.get('/', (req, res) => {
   res.send('Collaborative Code Editor Backend is running');
 });
