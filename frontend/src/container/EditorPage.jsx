@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase.config';
 import { Code2 } from 'lucide-react'; 
@@ -11,7 +11,7 @@ import { resetExecution } from '../redux/slices/codeExecutionSlice';
 import { Header, Sidebar, Editor, IOPanel } from '../components';
 import '../config/editorConfig'; 
 import { FaTimes } from 'react-icons/fa';
-import { useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 
 const EditorPage = () => {
   const { folderId, fileId } = useParams();
@@ -20,8 +20,23 @@ const EditorPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [roomId, setRoomId] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const [collaborators, setCollaborators] = useState([]);
   
+  // Connect to Socket.io server when component mounts
   useEffect(() => {
+    const socketInstance = io('http://localhost:5000');
+    setSocket(socketInstance);
+    
+    return () => {
+      if (socketInstance) socketInstance.disconnect();
+    };
+  }, []);
+  
+  // Handle room joining and collaboration
+  useEffect(() => {
+    if (!socket) return;
+    
     const urlParams = new URLSearchParams(location.search);
     const roomParam = urlParams.get('room');
     
@@ -29,64 +44,56 @@ const EditorPage = () => {
       setRoomId(roomParam);
       console.log("Joining collaborative room:", roomParam);
       
-      const isCreator = roomParam.startsWith(localStorage.getItem('userUID'));
-      localStorage.setItem('isRoomOwner', isCreator.toString());
+      const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
+      const userName = localStorage.getItem('userName') || 'Anonymous';
       
-      const ws = new WebSocket('ws://localhost:8080');
+      // Join the room
+      socket.emit('join-room', {
+        roomId: roomParam,
+        userId,
+        userName
+      });
       
-      ws.onopen = () => {
-        const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
-        const userName = localStorage.getItem('userName') || 'Anonymous';
-        
-        console.log(`Joining room ${roomParam} as ${userName} (${userId})`);
-        
-        ws.send(JSON.stringify({
-          type: 'join',
-          roomId: roomParam,
-          userId: userId,
-          userName: userName
-        }));
-      };
+      // Listen for user joined events
+      socket.on('user-joined', (data) => {
+        console.log(`User joined: ${data.userName}`);
+        // You can show a toast notification here
+      });
       
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Received message:', data.type);
-          switch (data.type) {
-            case 'userJoined':
-              console.log(`User joined: ${data.userName}`);
-              break;
-            case 'userLeft':
-              console.log(`User left: ${data.userName}`);
-              break;
-            case 'usersList':
-              console.log('Current users:', data.users);
-              break;
-            default:
-              break;
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
+      // Listen for user left events
+      socket.on('user-left', (data) => {
+        console.log(`User left: ${data.userName}`);
+        // You can show a toast notification here
+      });
       
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-    
-      return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'leave',
-            roomId: roomParam,
-            userId: localStorage.getItem('userUID') || 'anonymous'
+      // Listen for room users list updates
+      socket.on('room-users', (data) => {
+        console.log('Current users:', data.users);
+        setCollaborators(data.users);
+      });
+      
+      // Listen for code updates from other users
+      socket.on('code-update', (data) => {
+        if (currentFile) {
+          dispatch(setFileContent({
+            fileId: currentFile.id,
+            content: data.code
           }));
-          ws.close();
         }
-      };
+      });
     }
-  }, [location.search]);
-  
+    
+    return () => {
+      if (socket && roomParam) {
+        // Clean up event listeners
+        socket.off('user-joined');
+        socket.off('user-left');
+        socket.off('room-users');
+        socket.off('code-update');
+      }
+    };
+  }, [socket, location.search, dispatch]);
+
   useEffect(() => {
     const handleBackButton = (e) => {
       // Prevent default behavior
@@ -244,9 +251,27 @@ const EditorPage = () => {
     return null;
   }
 
+  // Function to handle code changes and emit to collaborators
+  const handleCodeChange = (fileId, newContent) => {
+    // Update local state
+    dispatch(setFileContent({
+      fileId,
+      content: newContent
+    }));
+    
+    // Emit to other collaborators if in a room
+    if (socket && roomId) {
+      socket.emit('code-change', {
+        roomId,
+        code: newContent,
+        userId: localStorage.getItem('userUID') || 'anonymous'
+      });
+    }
+  };
+
   return (
     <div className="w-screen h-screen overflow-hidden bg-[#1e1e1e]">
-      <Header />
+      <Header collaborators={collaborators} />
       <div className="w-full h-[calc(100vh-48px)] flex">
         <div className="w-80 flex-shrink-0">
           <Sidebar folderId={folderId} />
@@ -279,7 +304,12 @@ const EditorPage = () => {
           {/* Editor content */}
           <div className={`flex-grow ${!currentFile ? 'flex items-center justify-center' : ''}`}>
             {currentFile ? (
-              <Editor fileId={currentFile.id} />
+              <Editor 
+                fileId={currentFile.id} 
+                onCodeChange={handleCodeChange} 
+                socket={socket} 
+                roomId={roomId} 
+              />
             ) : (
               <div className="text-gray-400 text-center flex flex-col items-center">
                 <Code2 className="w-12 h-12 mb-4 opacity-40" />
