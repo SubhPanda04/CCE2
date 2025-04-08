@@ -9,15 +9,16 @@ const Home = () => {
   const location = useLocation();
 
   useEffect(() => {
+    // Clear any existing auth state when the app loads
+    localStorage.removeItem('userUID');
+    localStorage.removeItem('userName');
+    
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setAuthChecked(true);
       
-      // Store auth state in localStorage
-      if (currentUser) {
-        localStorage.setItem('userUID', currentUser.uid);
-        localStorage.setItem('userName', currentUser.displayName || currentUser.email?.split('@')[0] || 'User');
-      }
+      // We'll no longer store auth state in localStorage automatically
+      // This prevents auto-login behavior
     });
 
     return () => unsubscribe();
@@ -38,13 +39,7 @@ const Home = () => {
           <Routes>
             <Route 
               path="/auth" 
-              element={
-                user ? (
-                  <Navigate to="/home/projects" replace />
-                ) : (
-                  <SignUp />
-                )
-              } 
+              element={<SignUp />} 
             />
             <Route 
               path="/projects" 
@@ -56,8 +51,8 @@ const Home = () => {
                 )
               } 
             />
-            <Route path="/" element={<Navigate to={user ? "/home/projects" : "/home/auth"} replace />} />
-            <Route path="*" element={<Navigate to={user ? "/home/projects" : "/home/auth"} replace />} />
+            <Route path="/" element={<Navigate to="/home/auth" replace />} />
+            <Route path="*" element={<Navigate to="/home/auth" replace />} />
           </Routes>
         </div>
       </div>

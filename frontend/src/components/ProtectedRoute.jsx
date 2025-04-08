@@ -24,7 +24,8 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  if (!isAuthenticated) {
+  // Only protect the projects page, not the auth page
+  if (!isAuthenticated && location.pathname.includes('/projects')) {
     return <Navigate to="/home/auth" state={{ from: location.pathname }} replace />;
   }
 
