@@ -89,11 +89,17 @@ const EditorPage = () => {
   
   useEffect(() => {
     const handleBackButton = (e) => {
+      // Prevent default behavior
       e.preventDefault();
+      // Navigate to projects page
       navigate('/home/projects');
     };
 
+    // Add event listener for popstate (back button)
     window.addEventListener('popstate', handleBackButton);
+
+    // Create a history entry to ensure popstate works correctly
+    window.history.pushState(null, '', window.location.href);
 
     return () => {
       window.removeEventListener('popstate', handleBackButton);
