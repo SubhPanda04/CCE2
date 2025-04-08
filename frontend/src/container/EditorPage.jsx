@@ -12,21 +12,6 @@ import { Header, Sidebar, Editor, IOPanel } from '../components';
 import '../config/editorConfig'; 
 import { FaTimes } from 'react-icons/fa';
 import { useLocation } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-
-// Add the missing findFileInFolder function
-const findFileInFolder = (items, targetFileId) => {
-  for (const item of items) {
-    if (item.id === targetFileId) {
-      return item;
-    }
-    if (item.type === 'folder' && item.items) {
-      const found = findFileInFolder(item.items, targetFileId);
-      if (found) return found;
-    }
-  }
-  return null;
-};
 
 const EditorPage = () => {
   const { folderId, fileId } = useParams();
@@ -34,55 +19,8 @@ const EditorPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [error, setErrorState] = useState(null);
   const [roomId, setRoomId] = useState(null);
-  const [copied, setCopied] = useState(false);
   
-  // Get required state from Redux store
-  const { currentFile, openFiles, unsavedChanges } = useSelector((state) => state.editor);
-  const { isInputVisible, isOutputVisible } = useSelector((state) => state.ui);
-  
-  const urlParams = new URLSearchParams(location.search);
-  const roomParam = urlParams.get('room');
-  
-  // Define the copyToClipboard function
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success('Room link copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-      toast.error('Failed to copy link');
-    }
-  };
-  
-  // Define the copyShareableLink function
-  const copyShareableLink = () => {
-    // Use current window location instead of ngrok
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    
-    if (!roomParam) {
-      const newRoomId = Math.random().toString(36).substring(2, 9);
-      localStorage.setItem('isRoomOwner', 'true');
-      const currentPath = window.location.pathname;
-      const newUrl = `${currentPath}?room=${newRoomId}`;
-      
-      navigate(newUrl, { replace: true });
-      
-      setTimeout(() => {
-        const shareableUrl = `${protocol}//${host}${newUrl}`;
-        copyToClipboard(shareableUrl);
-      }, 100);
-    } else {
-      const shareableUrl = `${protocol}//${host}${window.location.pathname}?room=${roomParam}`;
-      copyToClipboard(shareableUrl);
-    }
-  };
-  
-  // First useEffect - Handle room parameter
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const roomParam = urlParams.get('room');
@@ -94,70 +32,50 @@ const EditorPage = () => {
       const isCreator = roomParam.startsWith(localStorage.getItem('userUID'));
       localStorage.setItem('isRoomOwner', isCreator.toString());
       
-      // Use a direct WebSocket URL without any URL constructor
-      let ws;
-      try {
-        // Use WebSocket URL based on current window location
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.host;
-        const socketUrl = `${wsProtocol}//${wsHost}/ws`;
-        
-        console.log(`Connecting to WebSocket at ${socketUrl}`);
-        ws = new WebSocket(socketUrl);
-        
-        ws.onopen = () => {
-          console.log("WebSocket connection established successfully");
-          const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
-          const userName = localStorage.getItem('userName') || 'Anonymous';
-          
-          console.log(`Joining room ${roomParam} as ${userName} (${userId})`);
-          
-          ws.send(JSON.stringify({
-            type: 'join',
-            roomId: roomParam,
-            userId: userId,
-            userName: userName
-          }));
-        };
-        
-        // Add more detailed error handling
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          toast.error('Failed to connect to collaboration server');
-        };
-        
-        ws.onclose = () => {
-          console.log('WebSocket connection closed');
-        };
-        
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('Received message:', data.type);
-            switch (data.type) {
-              case 'userJoined':
-                console.log(`User joined: ${data.userName}`);
-                break;
-              case 'userLeft':
-                console.log(`User left: ${data.userName}`);
-                break;
-              case 'usersList':
-                console.log('Current users:', data.users);
-                break;
-              default:
-                break;
-            }
-          } catch (error) {
-            console.error('Error processing WebSocket message:', error);
-          }
-        };
-      } catch (error) {
-        console.error('WebSocket connection error:', error);
-        toast.error('Failed to establish WebSocket connection');
-      }
+      const ws = new WebSocket('ws://localhost:8080');
       
+      ws.onopen = () => {
+        const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
+        const userName = localStorage.getItem('userName') || 'Anonymous';
+        
+        console.log(`Joining room ${roomParam} as ${userName} (${userId})`);
+        
+        ws.send(JSON.stringify({
+          type: 'join',
+          roomId: roomParam,
+          userId: userId,
+          userName: userName
+        }));
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received message:', data.type);
+          switch (data.type) {
+            case 'userJoined':
+              console.log(`User joined: ${data.userName}`);
+              break;
+            case 'userLeft':
+              console.log(`User left: ${data.userName}`);
+              break;
+            case 'usersList':
+              console.log('Current users:', data.users);
+              break;
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    
       return () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'leave',
             roomId: roomParam,
@@ -167,40 +85,91 @@ const EditorPage = () => {
         }
       };
     }
-  }, [location.search, navigate]);
-
-  // Second useEffect - Fetch folder data
+  }, [location.search]);
+  
   useEffect(() => {
-    const fetchFolderData = async () => {
-      if (!folderId) {
-        console.log("No folder ID provided, skipping folder fetch");
-        setLoading(false);
-        return;
+    const handleBackButton = (e) => {
+      e.preventDefault();
+      navigate('/home/projects');
+    };
+
+    window.addEventListener('popstate', handleBackButton);
+
+    return () => {
+      window.removeEventListener('popstate', handleBackButton);
+    };
+  }, [navigate]);
+
+  const { isInputVisible, isOutputVisible } = useSelector((state) => state.ui);
+  const { openFiles, currentFile, unsavedChanges } = useSelector((state) => state.editor);
+
+  const findFileInFolder = (items, targetFileId) => {
+    for (const item of items) {
+      if (item.id === targetFileId) {
+        return item;
       }
+      if (item.type === 'folder' && item.items) {
+        const found = findFileInFolder(item.items, targetFileId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const roomParam = urlParams.get('room');
+    
+    if (roomParam) {
+      const isNewRoom = !localStorage.getItem('currentRoomId') || 
+                        localStorage.getItem('currentRoomId') !== roomParam;
       
-      console.log("Fetching folder data for ID:", folderId);
+      if (isNewRoom) {
+        const urlOrigin = new URL(document.referrer).origin;
+        const isFromSameOrigin = urlOrigin === window.location.origin;
+      
+        localStorage.setItem('isRoomOwner', (!isFromSameOrigin).toString());
+        localStorage.setItem('currentRoomId', roomParam);
+      }
+    } else {
+      localStorage.removeItem('isRoomOwner');
+      localStorage.removeItem('currentRoomId');
+    }
+  }, [location.search]);
+  
+  useEffect(() => {
+    const loadFolderData = async () => {
+      if (!folderId) return;
+      
       setLoading(true);
       try {
         const folderRef = doc(db, "playgrounds", folderId);
         const folderSnap = await getDoc(folderRef);
         
         if (folderSnap.exists()) {
-          console.log("Folder data found:", folderSnap.id);
           const folderData = folderSnap.data();
           const transformedData = {
             ...folderData,
             id: folderId,
-            items: folderData.items || []
+            createdAt: folderData.createdAt?.toMillis() || Date.now()
           };
-          
+        
           dispatch(setCurrentFolder(transformedData));
           
-          // If fileId is provided, set the current file
           if (fileId) {
-            console.log("File ID provided, setting current file:", fileId);
-            const fileItem = findFileInFolder(transformedData.items, fileId);
+            const findFileInFolder = (items) => {
+              for (const item of items) {
+                if (item.id === fileId) {
+                  return item;
+                }
+                if (item.type === 'folder' && item.items) {
+                  const found = findFileInFolder(item.items);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
             
-<<<<<<< HEAD
             const file = findFileInFolder(transformedData.items || []);
             
             if (file) {
@@ -210,32 +179,24 @@ const EditorPage = () => {
                 fileId: file.id, 
                 content: file.content || '' 
               }));
-=======
-            if (fileItem) {
-              console.log("File found in folder structure:", fileItem.name);
-              dispatch(setCurrentFile(fileItem));
-              dispatch(setFileContent({ fileId: fileItem.id, content: fileItem.content || '' }));
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
             } else {
-              console.error("File not found in folder structure");
-              setErrorState("File not found in this playground");
+              console.warn(`File with ID ${fileId} not found in folder`);
             }
           }
         } else {
-          console.error("Folder not found");
-          setErrorState("Playground not found");
+          dispatch(setError('Folder not found'));
+          navigate('/home/projects');
         }
       } catch (error) {
-        console.error("Error fetching folder data:", error);
-        setErrorState("Error loading playground");
-        dispatch(setError("Error loading playground"));
+        console.error('Error loading folder:', error);
+        dispatch(setError('Error loading folder'));
       } finally {
         setLoading(false);
       }
     };
     
-    fetchFolderData();
-  }, [folderId, fileId, dispatch]);
+    loadFolderData();
+  }, [folderId, fileId, dispatch, navigate]);
 
   if (loading) {
     return (
@@ -257,7 +218,7 @@ const EditorPage = () => {
   const handleCloseFile = async (e, fileId) => {
     e.preventDefault();
     e.stopPropagation();
-  
+
     const remainingFiles = openFiles.filter(f => f.id !== fileId);
     await dispatch(closeFile(fileId));
     dispatch(resetExecution());
@@ -286,7 +247,7 @@ const EditorPage = () => {
         </div>
         <div className="flex-1 flex flex-col relative overflow-hidden">
           {/* File tabs section */}
-          {openFiles && openFiles.length > 0 && (
+          {openFiles.length > 0 && (
             <div className="w-full flex items-center overflow-x-auto bg-[#0a2744] px-2 py-1">
               {openFiles.map((file) => (
                 <div 
@@ -295,21 +256,12 @@ const EditorPage = () => {
                   className={`flex items-center gap-2 px-3 py-2 mr-1 rounded-md cursor-pointer
                     ${currentFile?.id === file.id ? 'bg-[#132F4C] text-white' : 'text-gray-400 hover:bg-[#0d2f49]'}`}
                 >
-<<<<<<< HEAD
                   <Code2 className="w-4 h-4" />
                   <span className="text-sm">{file.name}</span>
                   {unsavedChanges[file.id] && <span className="text-blue-400 text-xs ml-1">*</span>}
                   <button 
                     onClick={(e) => handleCloseFile(e, file.id)} 
                     className="ml-1 text-xs text-gray-500 hover:text-white"
-=======
-                  <span className="truncate text-sm">
-                    {file.name} {unsavedChanges && unsavedChanges[file.id] ? '•' : ''}
-                  </span>
-                  <button
-                    onClick={(e) => handleCloseFile(e, file.id)}
-                    className="p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
                   >
                     <FaTimes />
                   </button>
@@ -317,19 +269,11 @@ const EditorPage = () => {
               ))}
             </div>
           )}
-<<<<<<< HEAD
          
           {/* Editor content */}
           <div className={`flex-grow ${!currentFile ? 'flex items-center justify-center' : ''}`}>
             {currentFile ? (
               <Editor fileId={currentFile.id} />
-=======
-    
-          {/* Editor or Empty State */}
-          <div className={`w-full ${(isInputVisible || isOutputVisible) ? 'h-[calc(100%-300px)]' : 'h-full'} overflow-hidden`}>
-            {openFiles && openFiles.length > 0 && currentFile ? (
-              <Editor />
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
             ) : (
               <div className="text-gray-400 text-center flex flex-col items-center">
                 <Code2 className="w-12 h-12 mb-4 opacity-40" />
@@ -357,8 +301,8 @@ const EditorPage = () => {
             </div>
           )}
         </div>
-        </div>
       </div>
+    </div>
   );
 };
 

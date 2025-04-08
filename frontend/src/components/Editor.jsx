@@ -35,35 +35,21 @@ const getLanguageFromFileName = (fileName) => {
 
 const contentCache = new Map();
 const Editor = () => {
-  const { folderId, fileId } = useParams();
-  const location = useLocation();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
-<<<<<<< HEAD
   const dispatch = useDispatch();
   const { currentFile, activeFiles, selectedTheme, isAIEnabled } = useSelector((state) => state.editor);
   const { currentFolder } = useSelector((state) => state.fileSystem);
   const location = useLocation();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  // Remove WebSocket state
-=======
-  const [isLoading, setIsLoading] = useState(true);
   const [ws, setWs] = useState(null);
   const [joinStatus, setJoinStatus] = useState('idle');
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
   const [copied, setCopied] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
   
-  // Get the room parameter from the URL
   const urlParams = new URLSearchParams(location.search);
   const roomParam = urlParams.get('room');
-  
-  const { currentFile, activeFiles, selectedTheme, isAIEnabled } = useSelector((state) => state.editor);
-  const { currentFolder } = useSelector((state) => state.fileSystem);
   
   const currentContent = useMemo(() => {
     if (!currentFile) return '';
@@ -75,11 +61,7 @@ const Editor = () => {
     return getLanguageFromFileName(currentFile.name);
   }, [currentFile?.name]);
 
-  // Improved copyShareableLink function that uses window location
   const copyShareableLink = () => {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    
     if (!roomParam) {
       const newRoomId = Math.random().toString(36).substring(2, 9);
       localStorage.setItem('isRoomOwner', 'true');
@@ -89,12 +71,10 @@ const Editor = () => {
       navigate(newUrl, { replace: true });
       
       setTimeout(() => {
-        const shareableUrl = `${protocol}//${host}${newUrl}`;
-        copyToClipboard(shareableUrl);
+        copyToClipboard(`${window.location.origin}${newUrl}`);
       }, 100);
     } else {
-      const shareableUrl = `${protocol}//${host}${window.location.pathname}?room=${roomParam}`;
-      copyToClipboard(shareableUrl);
+      copyToClipboard(`${window.location.origin}${window.location.pathname}?room=${roomParam}`);
     }
   };
 
@@ -134,6 +114,7 @@ const Editor = () => {
           });
         };
   
+
         await updateDoc(folderRef, {
           items: updateNestedFileContent(currentFolder.items)
         });
@@ -146,7 +127,6 @@ const Editor = () => {
     [currentFolder]
   );
 
-<<<<<<< HEAD
   const handleEditorDidMount = (editor, monaco) => {
     console.time('Editor mount');
     editorRef.current = editor;
@@ -200,253 +180,134 @@ const Editor = () => {
     }
   };
 
-  // Remove WebSocket connection initialization
   useEffect(() => {
     if (roomParam) {
-      console.log('Room ID:', roomParam);
-      // We'll keep the room ID functionality but remove the WebSocket connection
-    }
-  }, [roomParam]);
-=======
-  // Enhanced WebSocket useEffect - KEEP THIS ONE
-  useEffect(() => {
-    if (!roomParam || !currentFile?.id) {
-      console.log('Missing room param or file ID:', { roomParam, fileId: currentFile?.id });
-      return;
-    }
-
-    const connectWebSocket = () => {
-      // Use WebSocket URL based on current window location
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = window.location.host;
-      const socketUrl = `${wsProtocol}//${wsHost}/ws`;
+      console.log('Initializing WebSocket connection for room:', roomParam);
       
-      console.log('Attempting WebSocket connection to:', socketUrl);
+      const socket = new WebSocket('ws://localhost:8080');
       
-      try {
-        const socket = new WebSocket(socketUrl);
+      socket.onopen = () => {
+        console.log('WebSocket connection established');
         
-        socket.onopen = () => {
-          console.log('WebSocket connected, setting up editor...');
-          setWs(socket);
-          setJoinStatus('connected');
+        const isRoomOwner = localStorage.getItem('isRoomOwner') === 'true';
+        const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
+        const userName = localStorage.getItem('userName') || 'Anonymous';
+        
+        if (isRoomOwner) {
+          setJoinStatus('owner');
+          socket.send(JSON.stringify({
+            type: 'joinAsOwner',
+            roomId: roomParam,
+            userId: userId,
+            userName: userName
+          }));
+        } else {
+          setJoinStatus('pending');
+          socket.send(JSON.stringify({
+            type: 'requestJoin',
+            roomId: roomParam,
+            userId: userId,
+            userName: userName
+          }));
+        }
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
           
-          // Initialize editor if not already done
-          if (editorRef.current && currentFile && currentContent) {
-            editorRef.current.setValue(currentContent);
+          if (data.type !== 'code') {
+            console.log('Received message:', data.type);
           }
           
-          const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
-          const userName = localStorage.getItem('userName') || 'Anonymous';
-          
-          socket.send(JSON.stringify({
-            type: 'join',
-            roomId: roomParam,
-            userId,
-            userName,
-            fileId: currentFile.id,
-            content: currentContent // Send initial content
-          }));
-        };
-
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            if (data.type !== 'code') {
-              console.log('Received message:', data.type);
-            }
-            
-            switch (data.type) {
-              case 'joinRequestAccepted':
-                setJoinStatus('accepted');
-                break;
+          switch (data.type) {
+            case 'joinRequestAccepted':
+              setJoinStatus('accepted');
+              break;
+              
+            case 'joinRequestRejected':
+              setJoinStatus('rejected');
+              if (data.userId === localStorage.getItem('userUID')) {
+                alert('Your request to join the room was rejected.');
+                window.location.href = '/home/projects';
+              }
+              break;
+              
+            case 'joinRequestPending':
+              setJoinStatus('pending');
+              break;
+              
+            case 'code':
+              const myUserId = localStorage.getItem('userUID');
+              if (data.fileId === currentFile?.id && data.userId !== myUserId) {
+                dispatch(setFileContent({
+                  fileId: data.fileId,
+                  content: data.code
+                }));
                 
-              case 'joinRequestRejected':
-                setJoinStatus('rejected');
-                if (data.userId === localStorage.getItem('userUID')) {
-                  toast.error('Your request to join the room was rejected.');
-                  navigate('/home/projects');
-                }
-                break;
+                contentCache.set(data.fileId, data.code);
                 
-              case 'joinRequestPending':
-                setJoinStatus('pending');
-                break;
-                
-              case 'code':
-                const myUserId = localStorage.getItem('userUID');
-                if (data.fileId === currentFile?.id && data.userId !== myUserId) {
-                  dispatch(setFileContent({
-                    fileId: data.fileId,
-                    content: data.code
-                  }));
-                  
-                  contentCache.set(data.fileId, data.code);
-                  
-                  if (editorRef.current) {
-                    const currentModel = editorRef.current.getModel();
-                    if (currentModel) {
-                      const selections = editorRef.current.getSelections();
-                      currentModel.setValue(data.code);
-                      if (selections) {
-                        editorRef.current.setSelections(selections);
-                      }
+                if (editorRef.current) {
+                  const currentModel = editorRef.current.getModel();
+                  if (currentModel) {
+                    const selections = editorRef.current.getSelections();
+                    currentModel.setValue(data.code);
+                    if (selections) {
+                      editorRef.current.setSelections(selections);
                     }
                   }
                 }
-                break;
-                
-              default:
-                console.log('Unhandled message type:', data.type);
-                break;
-            }
-          } catch (error) {
-            console.error('Error processing WebSocket message:', error);
+              }
+              break;
+              
+            default:
+              break;
           }
-        };
-
-        socket.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          setJoinStatus('error');
-          toast.error('Connection error. Retrying...');
-          setTimeout(connectWebSocket, 2000); // Auto-retry after 2 seconds
-        };
-
-        socket.onclose = () => {
-          console.log('WebSocket closed');
-          setJoinStatus('disconnected');
-          setTimeout(connectWebSocket, 2000); // Auto-reconnect after 2 seconds
-        };
-
-        return () => {
-          if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.close();
-          }
-        };
-      } catch (error) {
-        console.error('WebSocket setup error:', error);
-        toast.error('Failed to connect. Retrying...');
-        setTimeout(connectWebSocket, 2000); // Auto-retry after 2 seconds
-      }
-    };
-
-    connectWebSocket();
-  }, [roomParam, currentFile?.id, currentContent, navigate]);
-
-  // Modified editor mount handler
-  const handleEditorDidMount = (editor, monaco) => {
-    console.log("Editor mounting with content:", currentContent);
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-
-    try {
-      monaco.editor.setTheme(selectedTheme === 'light' ? 'vs' : 'vs-dark');
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
       
-      // Set initial content
-      if (currentContent) {
-        editor.setValue(currentContent);
-      }
-
-      // Setup change handler
-      editor.onDidChangeModelContent(() => {
-        if (!currentFile) return;
-        
-        const newContent = editor.getValue();
-        dispatch(setFileContent({ fileId: currentFile.id, content: newContent }));
-        
-        if (ws && ws.readyState === WebSocket.OPEN && roomParam) {
-          ws.send(JSON.stringify({
-            type: 'code',
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      setWs(socket);
+      
+      return () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: 'leave',
             roomId: roomParam,
-            fileId: currentFile.id,
-            code: newContent,
             userId: localStorage.getItem('userUID') || 'anonymous'
           }));
+          socket.close();
         }
-        
-        debouncedUpdate(currentFile.id, newContent);
-      });
-      
-      setEditorReady(true);
-      setIsLoading(false);
-      
-      console.log("Editor mounted successfully");
-    } catch (error) {
-      console.error('Editor mount error:', error);
-      setEditorReady(true);
-      setIsLoading(false);
+      };
     }
-  };
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
+  }, [roomParam, dispatch, currentFile]);
 
-  // Update WebSocket message handler
-  useEffect(() => {
-    if (!roomParam || !currentFile?.id) return;
-
-    const connectWebSocket = () => {
-      const wsNgrokDomain = localStorage.getItem('wsNgrokUrl') || 'ebf5-103-92-44-199.ngrok-free.app';
-      const socketUrl = `wss://${wsNgrokDomain.trim()}/ws`;
-      
-      try {
-        const socket = new WebSocket(socketUrl);
-        
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'code' && data.fileId === currentFile.id && data.userId !== localStorage.getItem('userUID')) {
-              // Update editor content without triggering the change event
-              if (editorRef.current) {
-                const position = editorRef.current.getPosition();
-                editorRef.current.setValue(data.code);
-                editorRef.current.setPosition(position);
-              }
-              
-              dispatch(setFileContent({ fileId: data.fileId, content: data.code }));
-            }
-          } catch (error) {
-            console.error('Error processing WebSocket message:', error);
-          }
-        };
-
-        // ... rest of WebSocket setup ...
-      } catch (error) {
-        console.error('WebSocket setup error:', error);
-      }
-    };
-
-    connectWebSocket();
-  }, [roomParam, currentFile?.id]);
-
-  // Diagnostic logging
-  useEffect(() => {
-    console.log("Editor component state:", {
-      currentFile: currentFile?.name,
-      roomParam,
-      editorReady,
-      joinStatus
-    });
-    
-    return () => {
-      console.log("Editor component unmounting");
-    };
-  }, [currentFile, roomParam, editorReady, joinStatus]);
-
-  // Add the missing handleEditorChange function
   const handleEditorChange = (value) => {
-    if (!currentFile) return;
-    
-<<<<<<< HEAD
-    dispatch(setFileContent({ id: currentFile.id, content: value }));
-    
-    // Remove WebSocket broadcast
+    if (!currentFile || !currentFolder) return;
+    dispatch(setFileContent({ 
+      fileId: currentFile.id, 
+      content: value 
+    }));
     debouncedUpdate(currentFile.id, value);
-=======
-    // The content change is already handled in the editor's onDidChangeModelContent event
-    // This function is just to satisfy the onChange prop requirement
-    // The actual content updates are managed in handleEditorDidMount
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
+    
+    const urlParams = new URLSearchParams(location.search);
+    const roomParam = urlParams.get('room');
+    
+    if (ws && ws.readyState === WebSocket.OPEN && roomParam && 
+        (joinStatus === 'accepted' || joinStatus === 'owner')) {
+      ws.send(JSON.stringify({
+        type: 'code',
+        roomId: roomParam,
+        fileId: currentFile.id,
+        code: value,
+        userId: localStorage.getItem('userUID') || 'anonymous'
+      }));
+    }
   };
 
   if (!currentFile) {
@@ -469,54 +330,52 @@ const Editor = () => {
           <span>Room: {roomParam}</span>
         </div>
       )}
-      
       <div className="h-full">
-        <MonacoEditor
-          height="100%"
-          defaultLanguage={editorLanguage}
-          language={editorLanguage}
-          value={currentContent}
-          theme={selectedTheme}
-          onChange={handleEditorChange}
-          onMount={handleEditorDidMount}
-          loading={
-            <div className="flex items-center justify-center h-full bg-[#1e1e1e]">
-              <div className="text-center space-y-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="text-gray-400">Loading editor...</p>
-              </div>
+      <MonacoEditor
+        height="100%"
+        defaultLanguage={editorLanguage}
+        language={editorLanguage}
+        value={currentContent}
+        theme={selectedTheme}
+        onChange={handleEditorChange}
+        onMount={handleEditorDidMount}
+        loading={
+          <div className="flex items-center justify-center h-full bg-[#1e1e1e]">
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="text-gray-400">Loading editor...</p>
             </div>
-          }
-          options={{
-            automaticLayout: true,
-            scrollBeyondLastLine: false,
-            minimap: { enabled: false },
-            fontSize: 20, // Increased from 14
-            fontFamily: "'Consolas', 'Courier New', monospace",
-            lineNumbers: 'on',
-            lineHeight: 29, // Added line height
-            letterSpacing: 0.5, // Added letter spacing
-            renderWhitespace: 'none',
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            cursorSmoothCaretAnimation: true,
-            formatOnPaste: true,
-            formatOnType: false, // Prevents auto-formatting while typing
-            renderControlCharacters: false,
-            renderIndentGuides: true,
-            scrollbar: {
-              useShadows: false,
-              verticalScrollbarSize: 10,
-              horizontalScrollbarSize: 10
-            }
-          }}
-          key={currentFile?.id} // Removed room param and content from key to prevent re-renders
-        />
+          </div>
+        }
+        options={{
+          fontSize: 21,
+          fontFamily: "'Consolas', 'Courier New', monospace",
+          lineNumbers: 'on',
+          minimap: { enabled: false }, 
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          wordWrap: 'on',
+          cursorStyle: 'line',
+          cursorBlinking: 'blink',
+          cursorSmoothCaretAnimation: 'on',
+          formatOnPaste: false,
+          formatOnType: false,
+          textDirection: 'ltr',
+          fontLigatures: false,
+          disableMonospaceOptimizations: true,
+          renderWhitespace: 'none',
+          renderControlCharacters: false,
+          renderIndentGuides: false,
+          folding: true,
+          glyphMargin: false
+        }}
+        key={currentFile.id}
+      />
       </div>
-      {isAIEnabled && <AIAssistant/>}
+      {/* Render AI assistant when enabled */}
+      {isAIEnabled && <AIAssistant />}
     </div>
   );
 };
 
 export default Editor;
-

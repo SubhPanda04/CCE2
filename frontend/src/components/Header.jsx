@@ -5,26 +5,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { setTheme, setCurrentFile, closeFile, setIsAIEnabled } from '../redux/slices/editorSlice';
 import { FaPlay, FaCode, FaUsers, FaTimes, FaCopy, FaCheck, FaRobot } from 'react-icons/fa';
-<<<<<<< HEAD
-import { executeCode, getLanguageId } from '../services/codeExecutionService';
-import { setExecuting, setOutput, setExecutionError, resetExecution } from '../redux/slices/codeExecutionSlice';
-import { toast } from 'react-hot-toast';
-=======
 import { toast } from 'react-hot-toast'; // Add this import for toast notifications
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
 
 const Header = () => {
   const { folderId, fileId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-<<<<<<< HEAD
-  const { currentFile, openFiles, unsavedChanges, selectedTheme, isAIEnabled } = useSelector((state) => state.editor);
-  const { activeFiles } = useSelector((state) => state.editor);
-  const { input } = useSelector((state) => state.codeExecution);
-=======
   // Fix the destructuring here
   const { currentFile, openFiles, unsavedChanges, selectedTheme, isAIEnabled } = useSelector((state) => state.editor);
->>>>>>> 7ab63417b9a4485f93b6e48084edd5359c63e1a5
   const [currentRoomId, setCurrentRoomId] = useState('');
   const themes = ['vs-dark', 'light', 'hc-black'];
   const [isRunning, setIsRunning] = useState(false);
