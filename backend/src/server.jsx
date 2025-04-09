@@ -11,9 +11,12 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST']
-  }
+    origin: process.env.FRONTEND_URL,
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket'],  // Force WebSocket transport
+  allowEIO3: true  // Enable Socket.IO v3 compatibility
 });
 
 // Store active rooms and their participants
@@ -120,6 +123,7 @@ app.get('/', (req, res) => {
   res.send('Collaborative Code Editor Backend is running');
 });
 
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
