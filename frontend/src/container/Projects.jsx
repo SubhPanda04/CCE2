@@ -69,6 +69,18 @@ const Projects = () => {
   const dispatch = useDispatch();
   const { playgrounds, loading, error } = useSelector((state) => state.playground);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const [userName, setUserName] = useState('User');
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        const displayName = user.displayName || user.email?.split('@')[0] || 'User';
+        setUserName(displayName);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const toggleFolder = (folderId) => {
     setExpandedFolders(prev => {
@@ -577,7 +589,7 @@ const Projects = () => {
             </button>
             <div className="h-14 px-8 rounded-xl bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center shadow-lg">
               <span className="text-white text-2xl font-semibold">
-                Welcome, {localStorage.getItem('userName') || 'User'}
+                Welcome, {userName}
               </span>
             </div>
           </div>
