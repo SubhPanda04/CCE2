@@ -127,7 +127,20 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 10000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Add more detailed logging
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Attempting to bind to ${HOST}:${PORT}`);
+console.log(`FRONTEND_URL set to: ${process.env.FRONTEND_URL || 'not set'}`);
+
 server.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
   console.log(`Server bound to all interfaces (0.0.0.0)`);
+});
+
+// Add an error handler for the server
+server.on('error', (error) => {
+  console.error('Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Try a different port.`);
+  }
 });
