@@ -123,7 +123,11 @@ app.get('/', (req, res) => {
   res.send('Collaborative Code Editor Backend is running');
 });
 
+// Update the port binding configuration
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
+  console.log(`Server bound to all interfaces (0.0.0.0)`);
 });
