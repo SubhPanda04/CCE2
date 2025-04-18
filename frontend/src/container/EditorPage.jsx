@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase.config';
 import { Code2 } from 'lucide-react'; 
@@ -11,7 +11,7 @@ import { resetExecution } from '../redux/slices/codeExecutionSlice';
 import { Header, Sidebar, Editor, IOPanel } from '../components';
 import '../config/editorConfig'; 
 import { FaTimes } from 'react-icons/fa';
-import { useLocation } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 const EditorPage = () => {
   const { folderId, fileId } = useParams();
@@ -20,73 +20,31 @@ const EditorPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [roomId, setRoomId] = useState(null);
+  const [collaborators, setCollaborators] = useState([]);
   
+  // Handle room joining and collaboration (local simulation)
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const roomParam = urlParams.get('room');
     
     if (roomParam) {
       setRoomId(roomParam);
-      console.log("Joining collaborative room:", roomParam);
+      console.log("Joining collaborative room (local simulation):", roomParam);
       
-      const isCreator = roomParam.startsWith(localStorage.getItem('userUID'));
-      localStorage.setItem('isRoomOwner', isCreator.toString());
+      const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
+      const userName = localStorage.getItem('userName') || 'Anonymous';
       
-      const ws = new WebSocket('ws://localhost:8080');
+      // Simulate collaborators with local data
+      setCollaborators([
+        { id: userId, name: userName + ' (You)', isActive: true },
+        { id: 'simulated-user-1', name: 'Guest User', isActive: true }
+      ]);
       
-      ws.onopen = () => {
-        const userId = localStorage.getItem('userUID') || 'anonymous-' + Math.random().toString(36).substring(2, 9);
-        const userName = localStorage.getItem('userName') || 'Anonymous';
-        
-        console.log(`Joining room ${roomParam} as ${userName} (${userId})`);
-        
-        ws.send(JSON.stringify({
-          type: 'join',
-          roomId: roomParam,
-          userId: userId,
-          userName: userName
-        }));
-      };
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Received message:', data.type);
-          switch (data.type) {
-            case 'userJoined':
-              console.log(`User joined: ${data.userName}`);
-              break;
-            case 'userLeft':
-              console.log(`User left: ${data.userName}`);
-              break;
-            case 'usersList':
-              console.log('Current users:', data.users);
-              break;
-            default:
-              break;
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
-      
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-    
-      return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'leave',
-            roomId: roomParam,
-            userId: localStorage.getItem('userUID') || 'anonymous'
-          }));
-          ws.close();
-        }
-      };
+      // Show toast notification
+      toast.success(`Joined room: ${roomParam.substring(0, 8)}...`);
     }
   }, [location.search]);
-  
+
   useEffect(() => {
     const handleBackButton = (e) => {
       // Prevent default behavior
@@ -279,7 +237,11 @@ const EditorPage = () => {
           {/* Editor content */}
           <div className={`flex-grow ${!currentFile ? 'flex items-center justify-center' : ''}`}>
             {currentFile ? (
-              <Editor fileId={currentFile.id} />
+              <Editor 
+                fileId={currentFile.id} 
+                roomId={roomId} 
+                collaborators={collaborators}
+              />
             ) : (
               <div className="text-gray-400 text-center flex flex-col items-center">
                 <Code2 className="w-12 h-12 mb-4 opacity-40" />

@@ -34,7 +34,8 @@ const getLanguageFromFileName = (fileName) => {
 };
 
 const contentCache = new Map();
-const Editor = () => {
+// Update the Editor component to handle local collaboration
+const Editor = ({ fileId, roomId, collaborators }) => {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const dispatch = useDispatch();
@@ -310,6 +311,46 @@ const Editor = () => {
     }
   };
 
+  // Add this function to simulate code changes from collaborators
+  const simulateCollaboratorChanges = useCallback(() => {
+    if (roomId && currentFile) {
+      // Only simulate changes occasionally
+      const shouldSimulate = Math.random() > 0.95;
+      
+      if (shouldSimulate) {
+        const currentLines = currentContent.split('\n');
+        if (currentLines.length > 3) {
+          // Simulate a comment being added by a collaborator
+          const randomLineIndex = Math.floor(Math.random() * currentLines.length);
+          currentLines[randomLineIndex] += ' // Updated by collaborator';
+          
+          const newContent = currentLines.join('\n');
+          
+          // Update content with simulated change
+          dispatch(setFileContent({
+            fileId: currentFile.id,
+            content: newContent
+          }));
+          
+          // Show toast notification
+          toast.success('Collaborator made a change', {
+            icon: '👤',
+            duration: 2000
+          });
+        }
+      }
+    }
+  }, [roomId, currentFile, currentContent, dispatch]);
+  
+  // Add effect to run the simulation
+  useEffect(() => {
+    if (!roomId) return;
+    
+    const interval = setInterval(simulateCollaboratorChanges, 30000); // Every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [roomId, simulateCollaboratorChanges]);
+  
   if (!currentFile) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#1e1e1e] text-gray-400">
